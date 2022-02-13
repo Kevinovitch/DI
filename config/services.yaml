@@ -1,0 +1,192 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
+parameters:
+    # the parameter name is an arbitrary string (the 'app.' prefix is recommended
+    # to better differentiate your parameters from Symfony parameters).
+    app.admin_email: 'something@example.com'
+
+    # boolean parameters
+    app.enable_v2_protocol: true
+
+    # array/collection parameters
+    app.supported_locales: ['en', 'es', 'fr']
+
+    # binary content parameters (encode the contents with base64_encode())
+    app.some_parameter: !!binary VGhpcyBpcyBhIEJlbGwgY2hhciAH
+
+    # PHP constants as parameter values
+#    app.some_constant: !php/const GLOBAL_CONSTANT
+#    app.another_constant: !php/const App\Entity\BlogPost::MAX_ITEMS
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: false      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+#    _instanceof:
+#        # services whose classes are instances of CustomInterface will be tagged automatically
+#        App\Security\CustomInterface:
+#            tags: ['app.custom_tag']
+
+    App\Mail\TransportChain: ~
+
+#    Swift_SmtpTransport:
+#        arguments: ['%mailer_host%']
+#        tags:
+#            - { name: 'app.mail_transport', alias: 'smtp'}
+
+#    Swift_SendmailTransport:
+#        tags:
+#            - { name: 'app.mail_transport', alias: 'sendmail'}
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+            - '../src/Tests/'
+
+    # explicitly configure the service
+    App\Updates\SiteUpdateManager:
+        arguments:
+            $adminEmail: 'manager@example.com'
+
+    # controllers are imported separately to make sure services can be injected
+    # as action arguments even if you don't extend any base controller class
+    App\Controller\:
+        resource: '../src/Controller/'
+        tags: ['controller.service_arguments']
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+
+    # explicitly configure the service
+    App\Service\MessageGenerator:
+        arguments:
+            # the '@' symbol is important: that's what tells the container
+            # you want to pass the *service* whose id is 'monolog.logger.request',
+            # and not just the *string* 'monolog.logger.request"
+            $logger: '@monolog.logger.request'
+
+
+#    App\Domain\:
+#        resource: '../src/Domain/*'
+#        # ...
+#
+#    command_handlers:
+#        namespace: App\Domain\
+#        resource: '../src/Domain/*/CommandHandler'
+#        tags: [command_handler]
+#
+#    event_subscribers:
+#        namespace: App\Domain\
+#        resource: '../src/Domain/*/EventSubscriber'
+#        tags: [event_subscriber]
+
+    # this is the service's id
+    site_update_manager.superadmin:
+        class: App\Updates\SiteUpdateManager
+        # you CAN still use autowiring: we just want to show what it looks like without
+        autowire: false
+        # manually wire all arguments
+        arguments :
+            - '@App\Service\MessageGenerator'
+            - '@mailer'
+            - 'superadmin@example.com'
+
+    site_update_manager.normal_users:
+        class: App\Updates\SiteUpdateManager
+        autowire: false
+        arguments:
+            - '@App\Service\MessageGenerator'
+            - '@mailer'
+            - 'contact@example.com'
+
+    # Create an alias, so that - by default - if you type-hint SiteUpdateManager
+    # the site_update_manager.superadmin will be used
+#    App\Updates\SiteUpdateManager: '@site_update_manager.superadmin'
+
+    App\Handler\One:
+        tags:
+            - { name: 'app.handler', priority: 20 }
+
+    App\Handler\Two:
+        tags: ['app.handler']
+
+    App\HandlerCollection:
+        # inject all services tagged with app.handler as first argument
+        arguments:
+            - !tagged_iterator app.handler
+
+    # if the factory use a regular method instead of a static one
+
+    # first, create a service for the factory
+    App\Mail\NewsletterManagerFactory: ~
+
+    # second, use the factory service as the first argument of the 'factory'
+    # option and the factory method as the second argument
+    # App\Mail\NewsletterManager:
+    #    factory: ['@App\Mail\NewsletterManagerFactory', 'createNewsletterManager"]
+
+    App\Mail\NewsletterManager:
+        class:  App\Mail\NewsletterManager
+        factory: '@App\Mail\NewsletterManagerFactory'
+
+    # If the createNewsletterManager takes the templating service as argument
+
+    # App\Mail\NewsletterManager:
+    #    factory: ['@App\Mail\NewsletterManagerFactory', createNewsletterManager]
+    #    arguments: ['@templating']
+
+    #App\Service\TwitterClient:
+        # redundant thanks to _defaults, but value is overridable on each service
+        #autowire: true
+
+#    App\Util\Rot13Transformer:
+#        autowire: true
+
+    # the id is not a class, so it won't be used for autowiring
+    app.rot13.transformer:
+        class: App\Util\Rot13Transformer
+        # ...
+
+    # but this fixes it!
+    # the "app.rot13.transformer" service will be injected when
+    # an "App\Util\Rot13Transformer" type-hint is detected
+    # App\Util\Rot13Transformer: '@app.rot13.transformer'
+
+
+    App\Util\Rot13Transformer: ~
+    App\Util\UppercaseTransformer: ~
+
+    # the ''App\Util\Rot13Transformer'' service will be injected when
+    # an ''App\Util\TransformerInterface'' type-hint is detected
+    #App\Util\TransformerInterface: '@App\Util\Rot13Transformer'
+
+
+    # the ''App\Util\UppercaseTransformer'' service will be
+    # injected when an ''App\Util\TransformerInterface''
+    # type-hint for a ''$shoutyTransformer'' argument is detected
+    App\Util\TransformerInterface $shoutyTransformer: '@App\Util\UppercaseTransformer'
+
+    # If the argument used for injection does not match, but the
+    # type-hint still matches, the ''App\Util\Rot13Transformer''
+    # service will be injected.
+    App\Util\TransformerInterface: '@App\Util\Rot13Transformer'
+
+    App\Service\TwitterClient:
+        # the Rot13Transformer will be passed as the $transformer argument
+        autowire: true
+
+        # If you wanted to choose the non-default service and do not
+        # want to use a named autowiring alias, wire it manually
+        #     $transformer: '@App\Util\UppercaseTransformer'
+        # ...
+
